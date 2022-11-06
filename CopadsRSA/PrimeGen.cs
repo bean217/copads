@@ -13,31 +13,6 @@ namespace PrimeGen
     /// </summary>
     class PrimeGen
     {
-        /// <summary>
-        ///     Displays generated prime numbers based on inputted arguments.
-        /// </summary>
-        /// <param name="args">
-        ///     Contains the bit length of each number and how many prime numbers to generate.
-        /// </param>
-        public static void Main(string[] args)
-        {
-            try
-            {
-                var primeGen = new PrimeGen();
-                // validate command line arguments
-                var usefulArgs = ValidateArgs(args);
-                var numBits = usefulArgs[0];
-                var count = usefulArgs[1];
-                Console.WriteLine("BitLength: {0} bits", usefulArgs[0]);
-                primeGen.GeneratePrimes(numBits, count);
-            }
-            catch (PrimeGenException pge)
-            {
-                // display error
-                Console.WriteLine($"{pge.Message}\n");
-                PrintUsage();
-            }
-        }
 
         /// <summary>
         ///     Generates and displays prime numbers based on validated user input,
@@ -129,65 +104,6 @@ namespace PrimeGen
                 });
             }
             return prime;
-        }
-
-        /// <summary>
-        ///     Validate command line arguments into two useful arguments.
-        /// </summary>
-        /// <param name="args">
-        ///     Input command line args.</param>
-        /// <returns>
-        ///     String array of size 2 with useful args.
-        /// </returns>
-        /// <exception cref="PrimeGenException">
-        ///     Thrown if arguments could not be validated.
-        /// </exception>
-        private static int[] ValidateArgs(string[] args)
-        {
-            try
-            {
-                // 1 or 2 valid arguments: <bits> <count=1>
-                if (args.Length == 1 || args.Length == 2)
-                {
-                    int bits = 0;
-                    int count = 1;
-                    // only one argument implies number of bits
-                    bits = int.Parse(args[0]);
-                    if (bits % 8 != 0 || bits < 32)
-                    {
-                        throw new PrimeGenException("Invalid amount of bits entered.");
-                    }
-                    if (args.Length == 2) 
-                    {
-                        count = int.Parse(args[1]);
-                        if (count < 1) 
-                        {
-                            throw new PrimeGenException("Invalid amount of prime numbers to generate entered.");
-                        }
-                    }
-                    return new int[2] {bits, count};
-                }
-                // throw PrimeGenException if invalid arguments were given
-                throw new PrimeGenException("Invalid amount of arguments entered.");
-            }
-            catch (FormatException) 
-            {
-                // attempted to parse a non-numeric value to an integer
-                throw new PrimeGenException("Invalid non-numeric value entered for count argument.");
-            }
-        }
-
-        /// <summary>
-        ///     Prints usage message to the console.
-        /// </summary>
-        private static void PrintUsage()
-        {
-            Console.WriteLine("Usage: PrimeGen <bits> {count=1}\n" +
-                "Calculate an amount of arbitrarily large prime numbers.\n\n" +
-                "bits\tNumber of bits.\n\tMust be at least 32 and divisible by 8.\n" +
-                "\tRequired argument.\n" +
-                "count\tNumber of prime numbers to calculate.\n\tMust be greater than 0.\n" +
-                "\tOptional argument (1 by default).\n\n");
         }
     }
 
