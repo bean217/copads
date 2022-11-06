@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +9,13 @@ namespace CopadsRSA
 {
     internal class SecureMessaging
     {
+        private HttpClient client;
+        private static string apiUri = "http://kayrun.cs.rit.edu:5000";
+        public SecureMessaging()
+        {
+            client = new HttpClient();
+        }
+
         /// <summary>
         ///     Generates a public.key and private.key pair of keySize bits.
         ///     These keys are written to the current directory using base64 encoding.
@@ -44,7 +52,33 @@ namespace CopadsRSA
         /// </param>
         public void getKey(string email)
         {
-
+            try
+            {
+                // GET public key for email
+                using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Key/{email}")).Result;
+                // Throw exception on server error
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new SMException($"Failed to retrieve public key for: {email}");
+                }
+                // Get the response body
+                var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
+                // If the response body is empty, then no key exists for email
+                if (responseBody.Length == 0)
+                {
+                    throw new SMException($"No public key found for: {email}");
+                }
+                
+                // Write response to <email>.key
+                using (var outputFile = File.CreateText($"{email}.key"))
+                {
+                    outputFile.Write(responseBody);
+                }
+            }
+            catch (HttpRequestException)
+            {
+                Console.WriteLine("Exception Thrown in getKey()");
+            }
         }
 
         /// <summary>
