@@ -22,6 +22,7 @@ namespace copadsRSA
                         secureMsgClient.keyGen(numBits);
                         break;
                     case "sendkey":
+                        secureMsgClient.sendKey(args[1]);
                         break;
                     case "getkey":
                         var email = args[1];

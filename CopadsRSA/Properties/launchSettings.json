@@ -2,7 +2,7 @@
   "profiles": {
     "CopadsRSA": {
       "commandName": "Project",
-      "commandLineArgs": "getKey jsb@cs.rit.edu"
+      "commandLineArgs": "sendKey brp8396@rit.edu"
     }
   }
 }

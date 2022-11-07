@@ -6,6 +6,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
+using CopadsRSA.Models;
 
 namespace CopadsRSA
 {
@@ -35,7 +36,9 @@ namespace CopadsRSA
             var offset = RandomNumberGenerator.GetInt32(keySize / 5, (keySize * 3 / 10) + 1);
             // get a random bit to determine if offset is positive or negative
             var sign = RandomNumberGenerator.GetInt32(2) == 0 ? -1 : 1;
-            Console.WriteLine($"offset: {(sign < 0 ? "-" : "")}{offset}");
+
+            ////Console.WriteLine($"offset: {(sign < 0 ? "-" : "")}{offset}");
+
             // determine number of p bits
             var pBits = (keySize / 2) + sign * offset;
             // assure pBits is divisible by 8
@@ -44,22 +47,42 @@ namespace CopadsRSA
             pBits = pBits < 256 ? 256 : (pBits > keySize - 256 ? keySize - 256 : pBits);
             // determine number of q bits, the complement amount of pBits
             var qBits = keySize - pBits;
-            Console.WriteLine($"# p bits: {pBits}");
-            Console.WriteLine($"# q bits: {qBits}");
+
+            ////Console.WriteLine($"# p bits: {pBits}");
+            ////Console.WriteLine($"# q bits: {qBits}");
+
             // generate random prime BigInts for p and q
             var primeGen = new PrimeGen.PrimeGen();
             var p = primeGen.GeneratePrime(pBits);
             var q = primeGen.GeneratePrime(qBits);
-            Console.WriteLine($"p: {p}");
-            Console.WriteLine($"q: {q}");
+
+            ////Console.WriteLine($"p: {p}");
+            ////Console.WriteLine($"q: {q}");
+
             // calculate n and r based on p and q
             var N = p * q;
             var r = (p - 1) * (q - 1);
             // generate public key
             int E = 65537;
             var D = modInverse(E, r);
-            var pubkey = new PublicKeyModel();
-            var pvtkey = new PrivateKeyModel();
+
+            // public key object
+            var pubkey = new PublicKeyModel(encodeKey(E, N));
+
+            // private key object
+            var pvtkey = new PrivateKeyModel(encodeKey(D, N));
+
+            // serialize public key and write it to public.key
+            using (var outputFile = File.CreateText($"public.key"))
+            {
+                outputFile.Write(JsonConvert.SerializeObject(pubkey));
+            }
+
+            // seruakuze private key and write it to private.key
+            using (var outputFile = File.CreateText($"private.key"))
+            {
+                outputFile.Write(JsonConvert.SerializeObject(pvtkey));
+            }
         }
 
         /// <summary>
@@ -75,6 +98,21 @@ namespace CopadsRSA
             if (!File.Exists("public.key") || !File.Exists("private.key"))
             {
                 throw new SMException("Key Pair Does not exist");
+            }
+
+            var pubkey = JsonConvert.DeserializeObject<PublicKeyModel>(File.ReadAllText("public.key"));
+            if (pubkey != null)
+            {
+                pubkey.Email = email;
+            }
+            var content = new StringContent(JsonConvert.SerializeObject(pubkey), Encoding.UTF8, "application/json");
+
+            // PUT public key for email
+            using HttpResponseMessage response = Task.Run(async () => await client.PutAsync($"{apiUri}/Key/{email}", content)).Result;
+            // Throw exception on server error
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new SMException($"Failed to upload public key for: {email}");
             }
         }
 
@@ -144,11 +182,34 @@ namespace CopadsRSA
             return "";
         }
 
-        private static string encodeKey(BigInteger key, BigInteger N)
+        private static KeyModel decodeKey(string base64key)
         {
+            byte[] bytes = Convert.FromBase64String(base64key);
 
-            return "";
+            int e = BitConverter.ToInt32(bytes.Take(4).Reverse().ToArray());
+
+            BigInteger E = new BigInteger(bytes.Skip(4).Take(e).ToArray());
+
+            int n = BitConverter.ToInt32(bytes.Skip(4).Skip(e).Take(4).Reverse().ToArray());
+
+            BigInteger N = new BigInteger(bytes.Skip(4).Skip(e).Skip(4).Take(n).ToArray());
+
+            return new KeyModel(E, N);
         }
+
+        private static string encodeKey(BigInteger E, BigInteger N)
+        {
+            byte[] eBytes = BitConverter.GetBytes(E.GetByteCount()).Reverse().ToArray();
+            byte[] EBytes = E.ToByteArray();
+            byte[] nBytes = BitConverter.GetBytes(N.GetByteCount()).Reverse().ToArray();
+            byte[] NBytes = N.ToByteArray();
+
+            byte[] bytes = eBytes.Concat(EBytes).Concat(nBytes).Concat(NBytes).ToArray();
+
+            return Convert.ToBase64String(bytes);
+        }
+
+
 
         private static BigInteger modInverse(BigInteger a, BigInteger n)
         {
