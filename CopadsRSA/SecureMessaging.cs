@@ -2,8 +2,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace CopadsRSA
 {
@@ -25,7 +27,39 @@ namespace CopadsRSA
         /// </param>
         public void keyGen(int keySize)
         {
-
+            if (keySize < 512 || keySize % 8 != 0)
+            {
+                throw new SMException("keySize must be at least 512 bits and divisible by 8");
+            }
+            // get an offset between 20% and 30% of the keySize
+            var offset = RandomNumberGenerator.GetInt32(keySize / 5, (keySize * 3 / 10) + 1);
+            // get a random bit to determine if offset is positive or negative
+            var sign = RandomNumberGenerator.GetInt32(2) == 0 ? -1 : 1;
+            Console.WriteLine($"offset: {(sign < 0 ? "-" : "")}{offset}");
+            // determine number of p bits
+            var pBits = (keySize / 2) + sign * offset;
+            // assure pBits is divisible by 8
+            pBits = pBits % 8 == 0 ? pBits : pBits - pBits % 8;
+            // if pBits cannot be less than 256 bits or more than keySize - 256 bits
+            pBits = pBits < 256 ? 256 : (pBits > keySize - 256 ? keySize - 256 : pBits);
+            // determine number of q bits, the complement amount of pBits
+            var qBits = keySize - pBits;
+            Console.WriteLine($"# p bits: {pBits}");
+            Console.WriteLine($"# q bits: {qBits}");
+            // generate random prime BigInts for p and q
+            var primeGen = new PrimeGen.PrimeGen();
+            var p = primeGen.GeneratePrime(pBits);
+            var q = primeGen.GeneratePrime(qBits);
+            Console.WriteLine($"p: {p}");
+            Console.WriteLine($"q: {q}");
+            // calculate n and r based on p and q
+            var N = p * q;
+            var r = (p - 1) * (q - 1);
+            // generate public key
+            int E = 65537;
+            var D = modInverse(E, r);
+            var pubkey = new PublicKeyModel();
+            var pvtkey = new PrivateKeyModel();
         }
 
         /// <summary>
@@ -108,6 +142,32 @@ namespace CopadsRSA
         public string getMsg(string email)
         {
             return "";
+        }
+
+        private static string encodeKey(BigInteger key, BigInteger N)
+        {
+
+            return "";
+        }
+
+        private static BigInteger modInverse(BigInteger a, BigInteger n)
+        {
+            BigInteger i = n, v = 0, d = 1;
+            while (a > 0)
+            {
+                BigInteger t = i / a, x = a;
+                a = i % x;
+                i = x;
+                x = d;
+                d = v - t * x;
+                v = x;
+            }
+            v %= n;
+            if (v < 0)
+            {
+                v = (v + n) % n;
+            }
+            return v;
         }
     }
 

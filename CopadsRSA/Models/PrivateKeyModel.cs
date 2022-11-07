@@ -10,5 +10,11 @@ namespace CopadsRSA
     {
         public IEnumerable<string>? Email { get; set; }
         public string? Key { get; set; }
+
+        public PrivateKeyModel(string? key)
+        {
+            this.Email = new List<string>();
+            this.Key = key;
+        }
     }
 }

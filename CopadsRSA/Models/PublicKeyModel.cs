@@ -10,5 +10,10 @@ namespace CopadsRSA
     {
         public string? Email { get; set; }
         public string? Key { get; set; }
+
+        public PublicKeyModel(string? key)
+        {
+            this.Key = key;
+        }
     }
 }

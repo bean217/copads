@@ -18,6 +18,8 @@ namespace copadsRSA
                 switch (command)
                 {
                     case "keygen":
+                        var numBits = int.Parse(args[1]);
+                        secureMsgClient.keyGen(numBits);
                         break;
                     case "sendkey":
                         break;
