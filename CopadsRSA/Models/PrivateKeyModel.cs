@@ -8,7 +8,7 @@ namespace CopadsRSA
 {
     internal class PrivateKeyModel
     {
-        public IEnumerable<string>? Email { get; set; }
+        public List<string>? Email { get; set; }
         public string? Key { get; set; }
 
         public PrivateKeyModel(string? key)

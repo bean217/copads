@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Security.Cryptography;
 using CopadsRSA.Models;
+using System.Reflection.Metadata;
 
 namespace CopadsRSA
 {
@@ -100,11 +101,24 @@ namespace CopadsRSA
                 throw new SMException("Key Pair Does not exist");
             }
 
+            // deserialize the public and private key
             var pubkey = JsonConvert.DeserializeObject<PublicKeyModel>(File.ReadAllText("public.key"));
-            if (pubkey != null)
+            var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText("public.key"));
+            
+            if ((pvtkey == null || pvtkey.Email == null) || (pubkey == null || pubkey.Email == null))
             {
-                pubkey.Email = email;
+                throw new SMException("Key Pair Does not exist");
             }
+            // set/add email to the public/private keys
+            pubkey.Email = email;
+            pvtkey.Email.Add(email);
+
+            // save private key data locally
+            using (var outputFile = File.CreateText($"private.key"))
+            {
+                outputFile.Write(JsonConvert.SerializeObject(pvtkey));
+            }
+
             var content = new StringContent(JsonConvert.SerializeObject(pubkey), Encoding.UTF8, "application/json");
 
             // PUT public key for email
@@ -165,7 +179,44 @@ namespace CopadsRSA
         /// </param>
         public void sendMsg(string email, string plaintext)
         {
+            // Ensure public key for email exists
+            if (!File.Exists($"{email}.key"))
+            {
+                throw new SMException($"No public key found for: {email}");
+            }
+            // take the plaintext message and convert it to a byte array
+            byte[] message = Encoding.UTF8.GetBytes(plaintext);
+            // take the message byte array and load it into a big integer
+            BigInteger messageData = new BigInteger(message, isUnsigned: true);
 
+            // get the deserialize the public key for email
+            var emailPubkey = JsonConvert.DeserializeObject<PublicKeyModel>(File.ReadAllText($"{email}.key"));
+
+            if (emailPubkey == null || emailPubkey.Key == null)
+            {
+                throw new SMException($"Missing public key for: {email}");
+            }
+
+            KeyModel pubkey = decodeKey(emailPubkey.Key);
+
+            // perform the encryption algorithm
+            BigInteger cipherData = BigInteger.ModPow(messageData, pubkey.Key, pubkey.Modulus);
+            // convert the resulting cipherData to a byte array
+            byte[] cipherMessage = cipherData.ToByteArray();
+            // Base64 encode the byte array
+            string cipherMsgBase64 = Convert.ToBase64String(cipherMessage);
+            // load the base64 encoded message into a message object
+            var preparedMessage = new MessageModel(email, cipherMsgBase64);
+            // send the message to the server
+            var content = new StringContent(JsonConvert.SerializeObject(preparedMessage), Encoding.UTF8, "application/json");
+
+            // PUT message for email
+            using HttpResponseMessage response = Task.Run(async () => await client.PutAsync($"{apiUri}/Message/{email}", content)).Result;
+            // Throw exception on server error
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new SMException($"Failed to upload message for: {email}");
+            }
         }
 
         /// <summary>
@@ -179,7 +230,48 @@ namespace CopadsRSA
         /// </returns>
         public string getMsg(string email)
         {
-            return "";
+            // validate private key exists for email being requested
+            if (!File.Exists("private.key"))
+            {
+                throw new SMException($"Private key does not exist for: {email}");
+            }
+            var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText("private.key"));
+            if (pvtkey == null || pvtkey.Key == null || pvtkey.Email == null || !pvtkey.Email.Contains(email))
+            {
+                throw new SMException($"Private key does not exist for: {email}");
+            }
+
+            // load json object from the server into a local object
+            // GET message for email
+            using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Message/{email}")).Result;
+            // Throw exception on server error
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new SMException($"Failed to upload message for: {email}");
+            }
+            // Get the response body
+            var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
+            // If the response body is empty, then no key exists for email
+            if (responseBody.Length == 0)
+            {
+                throw new SMException($"No public key found for: {email}");
+            }
+            var messageObj = JsonConvert.DeserializeObject<MessageModel>(responseBody);
+            if (messageObj == null || messageObj.Content == null)
+            {
+                throw new SMException($"No message from: {email}");
+            }
+            
+            // Base64 decode the content property of the message into a byte array
+            byte[] messageContent = Convert.FromBase64String(messageObj.Content);
+            BigInteger messageData = new BigInteger(messageContent, isUnsigned: true);
+
+            // perform the decryption algorithm
+            var pvtkeyObj = decodeKey(pvtkey.Key);
+            BigInteger plaintextData = BigInteger.ModPow(messageData, pvtkeyObj.Key, pvtkeyObj.Modulus);
+            // convert plaintextData to a byte array, then to a string
+            string plaintext = Encoding.UTF8.GetString(plaintextData.ToByteArray());
+            return plaintext;
         }
 
         private static KeyModel decodeKey(string base64key)
@@ -188,11 +280,11 @@ namespace CopadsRSA
 
             int e = BitConverter.ToInt32(bytes.Take(4).Reverse().ToArray());
 
-            BigInteger E = new BigInteger(bytes.Skip(4).Take(e).ToArray());
+            BigInteger E = new BigInteger(bytes.Skip(4).Take(e).ToArray(), isUnsigned: true);
 
             int n = BitConverter.ToInt32(bytes.Skip(4).Skip(e).Take(4).Reverse().ToArray());
 
-            BigInteger N = new BigInteger(bytes.Skip(4).Skip(e).Skip(4).Take(n).ToArray());
+            BigInteger N = new BigInteger(bytes.Skip(4).Skip(e).Skip(4).Take(n).ToArray(), isUnsigned: true);
 
             return new KeyModel(E, N);
         }

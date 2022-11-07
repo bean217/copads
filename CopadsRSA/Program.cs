@@ -29,15 +29,15 @@ namespace copadsRSA
                         secureMsgClient.getKey(email);
                         break;
                     case "sendmsg":
+                        secureMsgClient.sendMsg(args[1], args[2]);
                         break;
                     case "getmsg":
+                        Console.WriteLine(secureMsgClient.getMsg(args[1]));
                         break;
                     default:
                         break;
                 }
             }
-
-            //Console.ReadKey();
         }
     }
 }
