@@ -103,30 +103,33 @@ namespace CopadsRSA
 
             // deserialize the public and private key
             var pubkey = JsonConvert.DeserializeObject<PublicKeyModel>(File.ReadAllText("public.key"));
-            var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText("public.key"));
-            
-            if ((pvtkey == null || pvtkey.Email == null) || (pubkey == null || pubkey.Email == null))
+            var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText("private.key"));
+
+            if (pvtkey == null || pubkey == null)
             {
                 throw new SMException("Key Pair Does not exist");
             }
             // set/add email to the public/private keys
             pubkey.Email = email;
-            pvtkey.Email.Add(email);
-
-            // save private key data locally
-            using (var outputFile = File.CreateText($"private.key"))
+            // If the email has already been tracked in the private key, ignore it
+            if (pvtkey.Email != null && !pvtkey.Email.Contains(email))
             {
-                outputFile.Write(JsonConvert.SerializeObject(pvtkey));
+                pvtkey.AddEmail(email);
             }
 
             var content = new StringContent(JsonConvert.SerializeObject(pubkey), Encoding.UTF8, "application/json");
-
             // PUT public key for email
             using HttpResponseMessage response = Task.Run(async () => await client.PutAsync($"{apiUri}/Key/{email}", content)).Result;
             // Throw exception on server error
             if (!response.IsSuccessStatusCode)
             {
                 throw new SMException($"Failed to upload public key for: {email}");
+            }
+
+            // save private key data locally after 200 OK from the server
+            using (var outputFile = File.CreateText($"private.key"))
+            {
+                outputFile.Write(JsonConvert.SerializeObject(pvtkey));
             }
         }
 
