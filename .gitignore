@@ -1,3 +1,4 @@
 /.vs
-/CopadsRSA/bin
-/CopadsRSA/obj
+**/*.key
+**/bin
+**/obj
