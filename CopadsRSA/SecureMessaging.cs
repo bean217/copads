@@ -233,18 +233,18 @@ namespace CopadsRSA
         /// </returns>
         public string getMsg(string email)
         {
-            // validate public key exists for email being requested
-            if (!File.Exists($"{email}.key"))
+            // validate private key exists
+            if (!File.Exists($"private.key"))
             {
-                throw new SMException($"Private key does not exist for: {email}");
+                throw new SMException($"Private key does not exist");
             }
-            var pvtkey = JsonConvert.DeserializeObject<PublicKeyModel>(File.ReadAllText($"{email}.key"));
+            // load json object from the server into a local object
+            var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText($"private.key"));
             if (pvtkey == null || pvtkey.Key == null || pvtkey.Email == null || !pvtkey.Email.Contains(email))
             {
-                throw new SMException($"Private key does not exist for: {email}");
+                throw new SMException($"Private key does not exist");
             }
 
-            // load json object from the server into a local object
             // GET message for email
             using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Message/{email}")).Result;
             // Throw exception on server error
@@ -264,9 +264,10 @@ namespace CopadsRSA
             {
                 throw new SMException($"No message from: {email}");
             }
-            
+
             // Base64 decode the content property of the message into a byte array
             byte[] messageContent = Convert.FromBase64String(messageObj.Content);
+
             BigInteger messageData = new BigInteger(messageContent, isUnsigned: true);
 
             // perform the decryption algorithm
