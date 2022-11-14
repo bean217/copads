@@ -233,12 +233,12 @@ namespace CopadsRSA
         /// </returns>
         public string getMsg(string email)
         {
-            // validate private key exists for email being requested
-            if (!File.Exists("private.key"))
+            // validate public key exists for email being requested
+            if (!File.Exists($"{email}.key"))
             {
                 throw new SMException($"Private key does not exist for: {email}");
             }
-            var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText("private.key"));
+            var pvtkey = JsonConvert.DeserializeObject<PublicKeyModel>(File.ReadAllText($"{email}.key"));
             if (pvtkey == null || pvtkey.Key == null || pvtkey.Email == null || !pvtkey.Email.Contains(email))
             {
                 throw new SMException($"Private key does not exist for: {email}");
