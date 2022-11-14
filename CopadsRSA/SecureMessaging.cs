@@ -11,10 +11,24 @@ using System.Reflection.Metadata;
 
 namespace CopadsRSA
 {
+    /// <summary>
+    ///     Class for encapsulating CopadsRSA functionality.
+    /// </summary>
     internal class SecureMessaging
     {
+        /// <summary>
+        ///     Client instance for communicating with the server.
+        /// </summary>
         private HttpClient client;
+
+        /// <summary>
+        ///     static api URL string
+        /// </summary>
         private static string apiUri = "http://kayrun.cs.rit.edu:5000";
+        
+        /// <summary>
+        ///     Secure messaging constructor
+        /// </summary>
         public SecureMessaging()
         {
             client = new HttpClient();
@@ -27,7 +41,7 @@ namespace CopadsRSA
         /// <param name="keySize">
         ///     Size of key pair in bits.
         /// </param>
-        public void keyGen(int keySize)
+        public void KeyGen(int keySize)
         {
             if (keySize < 512 || keySize % 8 != 0)
             {
@@ -65,13 +79,13 @@ namespace CopadsRSA
             var r = (p - 1) * (q - 1);
             // generate public key
             int E = 65537;
-            var D = modInverse(E, r);
+            var D = ModInverse(E, r);
 
             // public key object
-            var pubkey = new PublicKeyModel(encodeKey(E, N));
+            var pubkey = new PublicKeyModel(EncodeKey(E, N));
 
             // private key object
-            var pvtkey = new PrivateKeyModel(encodeKey(D, N));
+            var pvtkey = new PrivateKeyModel(EncodeKey(D, N));
 
             // serialize public key and write it to public.key
             using (var outputFile = File.CreateText($"public.key"))
@@ -94,7 +108,7 @@ namespace CopadsRSA
         /// <exception cref="SMException">
         ///     Thrown if public.key and private.key have not yet been generated
         /// </exception>
-        public void sendKey(string email)
+        public void SendKey(string email)
         {
             if (!File.Exists("public.key") || !File.Exists("private.key"))
             {
@@ -139,7 +153,8 @@ namespace CopadsRSA
         /// <param name="email">
         ///     Email of user whose public key is being fetched
         /// </param>
-        public void getKey(string email)
+        /// <exception cref="SMException">Thrown if public key does not exist for email</exception>
+        public void GetKey(string email)
         {
             try
             {
@@ -180,7 +195,8 @@ namespace CopadsRSA
         /// <param name="plaintext">
         ///     Plaintext message being sent to a user
         /// </param>
-        public void sendMsg(string email, string plaintext)
+        /// <exception cref="SMException">Thrown if message upload fails or email's public key does not exist</exception>
+        public void SendMsg(string email, string plaintext)
         {
             // Ensure public key for email exists
             if (!File.Exists($"{email}.key"))
@@ -200,7 +216,7 @@ namespace CopadsRSA
                 throw new SMException($"Missing public key for: {email}");
             }
 
-            KeyModel pubkey = decodeKey(emailPubkey.Key);
+            KeyModel pubkey = DecodeKey(emailPubkey.Key);
 
             // perform the encryption algorithm
             BigInteger cipherData = BigInteger.ModPow(messageData, pubkey.Key, pubkey.Modulus);
@@ -211,10 +227,12 @@ namespace CopadsRSA
             // load the base64 encoded message into a message object
             var preparedMessage = new MessageModel(email, cipherMsgBase64);
             // send the message to the server
-            var content = new StringContent(JsonConvert.SerializeObject(preparedMessage), Encoding.UTF8, "application/json");
+            var content = new StringContent(
+                JsonConvert.SerializeObject(preparedMessage), Encoding.UTF8, "application/json");
 
             // PUT message for email
-            using HttpResponseMessage response = Task.Run(async () => await client.PutAsync($"{apiUri}/Message/{email}", content)).Result;
+            using HttpResponseMessage response = Task.Run(
+                async () => await client.PutAsync($"{apiUri}/Message/{email}", content)).Result;
             // Throw exception on server error
             if (!response.IsSuccessStatusCode)
             {
@@ -231,7 +249,8 @@ namespace CopadsRSA
         /// <returns>
         ///     Decoded plaintext message from a user
         /// </returns>
-        public string getMsg(string email)
+        /// <exception cref="SMException">Thrown if a key has not been generated or message retrieval failed</exception>
+        public string GetMsg(string email)
         {
             // validate private key exists
             if (!File.Exists($"private.key"))
@@ -242,7 +261,7 @@ namespace CopadsRSA
             var pvtkey = JsonConvert.DeserializeObject<PrivateKeyModel>(File.ReadAllText($"private.key"));
             if (pvtkey == null || pvtkey.Key == null || pvtkey.Email == null || !pvtkey.Email.Contains(email))
             {
-                throw new SMException($"Private key does not exist");
+                throw new SMException($"Private key does not exist for {email}");
             }
 
             // GET message for email
@@ -250,7 +269,7 @@ namespace CopadsRSA
             // Throw exception on server error
             if (!response.IsSuccessStatusCode)
             {
-                throw new SMException($"Failed to upload message for: {email}");
+                throw new SMException($"Failed to download message for: {email}");
             }
             // Get the response body
             var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
@@ -262,7 +281,7 @@ namespace CopadsRSA
             var messageObj = JsonConvert.DeserializeObject<MessageModel>(responseBody);
             if (messageObj == null || messageObj.Content == null)
             {
-                throw new SMException($"No message from: {email}");
+                throw new SMException($"No message for: {email}");
             }
 
             // Base64 decode the content property of the message into a byte array
@@ -271,14 +290,19 @@ namespace CopadsRSA
             BigInteger messageData = new BigInteger(messageContent, isUnsigned: true);
 
             // perform the decryption algorithm
-            var pvtkeyObj = decodeKey(pvtkey.Key);
+            var pvtkeyObj = DecodeKey(pvtkey.Key);
             BigInteger plaintextData = BigInteger.ModPow(messageData, pvtkeyObj.Key, pvtkeyObj.Modulus);
             // convert plaintextData to a byte array, then to a string
             string plaintext = Encoding.UTF8.GetString(plaintextData.ToByteArray());
             return plaintext;
         }
 
-        private static KeyModel decodeKey(string base64key)
+        /// <summary>
+        ///     Decodes an encoded key string into a KeyModel object
+        /// </summary>
+        /// <param name="base64key">Encoded key string</param>
+        /// <returns></returns>
+        private static KeyModel DecodeKey(string base64key)
         {
             byte[] bytes = Convert.FromBase64String(base64key);
 
@@ -293,7 +317,13 @@ namespace CopadsRSA
             return new KeyModel(E, N);
         }
 
-        private static string encodeKey(BigInteger E, BigInteger N)
+        /// <summary>
+        ///     Encodes a key's values (key and modulus) into an encoded base64 string.
+        /// </summary>
+        /// <param name="E">Encryption or decryption key</param>
+        /// <param name="N">Modulus value of key</param>
+        /// <returns></returns>
+        private static string EncodeKey(BigInteger E, BigInteger N)
         {
             byte[] eBytes = BitConverter.GetBytes(E.GetByteCount()).Reverse().ToArray();
             byte[] EBytes = E.ToByteArray();
@@ -305,9 +335,13 @@ namespace CopadsRSA
             return Convert.ToBase64String(bytes);
         }
 
-
-
-        private static BigInteger modInverse(BigInteger a, BigInteger n)
+        /// <summary>
+        ///     Calculates the modular inverse of two integers
+        /// </summary>
+        /// <param name="a">Value whose modular inverse with n is being calculated</param>
+        /// <param name="n">Modulus</param>
+        /// <returns></returns>
+        private static BigInteger ModInverse(BigInteger a, BigInteger n)
         {
             BigInteger i = n, v = 0, d = 1;
             while (a > 0)
