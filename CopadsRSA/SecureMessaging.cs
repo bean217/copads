@@ -156,32 +156,25 @@ namespace CopadsRSA
         /// <exception cref="SMException">Thrown if public key does not exist for email</exception>
         public void GetKey(string email)
         {
-            try
+            // GET public key for email
+            using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Key/{email}")).Result;
+            // Throw exception on server error
+            if (!response.IsSuccessStatusCode)
             {
-                // GET public key for email
-                using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Key/{email}")).Result;
-                // Throw exception on server error
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new SMException($"Failed to retrieve public key for: {email}");
-                }
-                // Get the response body
-                var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
-                // If the response body is empty, then no key exists for email
-                if (responseBody.Length == 0)
-                {
-                    throw new SMException($"No public key found for: {email}");
-                }
-                
-                // Write response to <email>.key
-                using (var outputFile = File.CreateText($"{email}.key"))
-                {
-                    outputFile.Write(responseBody);
-                }
+                throw new SMException($"Failed to retrieve public key for: {email}");
             }
-            catch (HttpRequestException)
+            // Get the response body
+            var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
+            // If the response body is empty, then no key exists for email
+            if (responseBody.Length == 0)
             {
-                Console.WriteLine("Exception Thrown in getKey()");
+                throw new SMException($"No public key found for: {email}");
+            }
+
+            // Write response to <email>.key
+            using (var outputFile = File.CreateText($"{email}.key"))
+            {
+                outputFile.Write(responseBody);
             }
         }
 
