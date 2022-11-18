@@ -1,4 +1,8 @@
-﻿using System;
+﻿/// Author: Benjamin Piro
+/// Email: brp8396@rit.edu
+/// File Description: Represents a private key that can be stored locally.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;

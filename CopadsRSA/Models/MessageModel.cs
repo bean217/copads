@@ -1,4 +1,8 @@
-﻿using System;
+﻿/// Author: Benjamin Piro
+/// Email: brp8396@rit.edu
+/// File Description: Represents a logical message for a particular user.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;

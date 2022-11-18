@@ -1,4 +1,8 @@
-﻿using System;
+﻿/// Author: Benjamin Piro
+/// Email: brp8396@rit.edu
+/// File Description: Model class for representing a logical RSA (public or private) key.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;

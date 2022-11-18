@@ -1,4 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿/// Author: Benjamin Piro
+/// Email: brp8396@rit.edu
+/// File Description: Defines logic for secure messaging using RSA.
+
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -132,18 +136,26 @@ namespace CopadsRSA
             }
 
             var content = new StringContent(JsonConvert.SerializeObject(pubkey), Encoding.UTF8, "application/json");
-            // PUT public key for email
-            using HttpResponseMessage response = Task.Run(async () => await client.PutAsync($"{apiUri}/Key/{email}", content)).Result;
-            // Throw exception on server error
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new SMException($"Failed to upload public key for: {email}");
-            }
 
-            // save private key data locally after 200 OK from the server
-            using (var outputFile = File.CreateText($"private.key"))
+            try
             {
-                outputFile.Write(JsonConvert.SerializeObject(pvtkey));
+                // PUT public key for email
+                using HttpResponseMessage response = Task.Run(async () => await client.PutAsync($"{apiUri}/Key/{email}", content)).Result;
+                // Throw exception on server error
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new SMException($"Failed to upload public key for: {email}");
+                }
+
+                // save private key data locally after 200 OK from the server
+                using (var outputFile = File.CreateText($"private.key"))
+                {
+                    outputFile.Write(JsonConvert.SerializeObject(pvtkey));
+                }
+            }
+            catch (AggregateException)
+            {
+                throw new SMException($"Failed to connect to server: {apiUri}");
             }
         }
 
@@ -156,25 +168,31 @@ namespace CopadsRSA
         /// <exception cref="SMException">Thrown if public key does not exist for email</exception>
         public void GetKey(string email)
         {
-            // GET public key for email
-            using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Key/{email}")).Result;
-            // Throw exception on server error
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                throw new SMException($"Failed to retrieve public key for: {email}");
-            }
-            // Get the response body
-            var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
-            // If the response body is empty, then no key exists for email
-            if (responseBody.Length == 0)
-            {
-                throw new SMException($"No public key found for: {email}");
-            }
+                // GET public key for email
+                using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Key/{email}")).Result;
+                // Throw exception on server error
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new SMException($"Failed to retrieve public key for: {email}");
+                }
+                // Get the response body
+                var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
+                // If the response body is empty, then no key exists for email
+                if (responseBody.Length == 0)
+                {
+                    throw new SMException($"No public key found for: {email}");
+                }
 
-            // Write response to <email>.key
-            using (var outputFile = File.CreateText($"{email}.key"))
+                // Write response to <email>.key
+                using (var outputFile = File.CreateText($"{email}.key"))
+                {
+                    outputFile.Write(responseBody);
+                }
+            } catch (AggregateException)
             {
-                outputFile.Write(responseBody);
+                throw new SMException($"Failed to connect to server: {apiUri}");
             }
         }
 
@@ -223,13 +241,20 @@ namespace CopadsRSA
             var content = new StringContent(
                 JsonConvert.SerializeObject(preparedMessage), Encoding.UTF8, "application/json");
 
-            // PUT message for email
-            using HttpResponseMessage response = Task.Run(
-                async () => await client.PutAsync($"{apiUri}/Message/{email}", content)).Result;
-            // Throw exception on server error
-            if (!response.IsSuccessStatusCode)
+            try 
             {
-                throw new SMException($"Failed to upload message for: {email}");
+                // PUT message for email
+                using HttpResponseMessage response = Task.Run(
+                    async () => await client.PutAsync($"{apiUri}/Message/{email}", content)).Result;
+                // Throw exception on server error
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new SMException($"Failed to upload message for: {email}");
+                }
+            }
+            catch (AggregateException)
+            {
+                throw new SMException($"Failed to connect to server: {apiUri}");
             }
         }
 
@@ -257,37 +282,44 @@ namespace CopadsRSA
                 throw new SMException($"Private key does not exist for {email}");
             }
 
-            // GET message for email
-            using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Message/{email}")).Result;
-            // Throw exception on server error
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                throw new SMException($"Failed to download message for: {email}");
+                // GET message for email
+                using HttpResponseMessage response = Task.Run(async () => await client.GetAsync($"{apiUri}/Message/{email}")).Result;
+                // Throw exception on server error
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new SMException($"Failed to download message for: {email}");
+                }
+                // Get the response body
+                var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
+                // If the response body is empty, then no key exists for email
+                if (responseBody.Length == 0)
+                {
+                    throw new SMException($"No public key found for: {email}");
+                }
+                var messageObj = JsonConvert.DeserializeObject<MessageModel>(responseBody);
+                if (messageObj == null || messageObj.Content == null)
+                {
+                    throw new SMException($"No message for: {email}");
+                }
+
+                // Base64 decode the content property of the message into a byte array
+                byte[] messageContent = Convert.FromBase64String(messageObj.Content);
+
+                BigInteger messageData = new BigInteger(messageContent, isUnsigned: true);
+
+                // perform the decryption algorithm
+                var pvtkeyObj = DecodeKey(pvtkey.Key);
+                BigInteger plaintextData = BigInteger.ModPow(messageData, pvtkeyObj.Key, pvtkeyObj.Modulus);
+                // convert plaintextData to a byte array, then to a string
+                string plaintext = Encoding.UTF8.GetString(plaintextData.ToByteArray());
+                return plaintext;
             }
-            // Get the response body
-            var responseBody = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
-            // If the response body is empty, then no key exists for email
-            if (responseBody.Length == 0)
+            catch (AggregateException)
             {
-                throw new SMException($"No public key found for: {email}");
+                throw new SMException($"Failed to connect to server: {apiUri}");
             }
-            var messageObj = JsonConvert.DeserializeObject<MessageModel>(responseBody);
-            if (messageObj == null || messageObj.Content == null)
-            {
-                throw new SMException($"No message for: {email}");
-            }
-
-            // Base64 decode the content property of the message into a byte array
-            byte[] messageContent = Convert.FromBase64String(messageObj.Content);
-
-            BigInteger messageData = new BigInteger(messageContent, isUnsigned: true);
-
-            // perform the decryption algorithm
-            var pvtkeyObj = DecodeKey(pvtkey.Key);
-            BigInteger plaintextData = BigInteger.ModPow(messageData, pvtkeyObj.Key, pvtkeyObj.Modulus);
-            // convert plaintextData to a byte array, then to a string
-            string plaintext = Encoding.UTF8.GetString(plaintextData.ToByteArray());
-            return plaintext;
         }
 
         /// <summary>

@@ -1,4 +1,8 @@
-﻿using CopadsRSA;
+﻿/// Author: Benjamin Piro
+/// Email: brp8396@rit.edu
+/// File Description: Startup program for running CopadsRSA command line interface.
+
+using CopadsRSA;
 using System;
 using System.Collections.Generic;
 using System.Linq;
